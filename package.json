@@ -1,0 +1,31 @@
+{
+    "name": "playwright",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "test": "npx playwright test",
+        "report": "npx playwright show-report",
+        "bdd:logout": "cucumber-js e2e/features/logout.feature --require e2e/support/world.js --require e2e/steps/hooks.js --require e2e/steps/common.steps.js --require e2e/steps/*.js",
+        "bdd:all": "cucumber-js e2e/features --require e2e/support/world.js --require e2e/steps/hooks.js --require e2e/steps/common.steps.js --require e2e/steps/*.js",
+        "bdd:login": "cucumber-js e2e/features/login.feature --require e2e/support/world.js --require e2e/steps/hooks.js --require e2e/steps/common.steps.js --require e2e/steps/*.js",
+        "bdd:companyprofile": "cucumber-js e2e/features/companyprofile.feature --require e2e/support/world.js --require e2e/steps/hooks.js --require e2e/steps/common.steps.js --require e2e/steps/*.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "@axe-core/playwright": "^4.10.2",
+        "@cucumber/cucumber": "^12.1.0",
+        "@percy/cli": "^1.31.1",
+        "@percy/playwright": "^1.0.9",
+        "@playwright/test": "^1.54.0",
+        "@types/node": "^20.14.10",
+        "k6-html-reporter": "^1.0.5"
+    },
+    "dependencies": {
+        "axios": "^1.10.0",
+        "dotenv": "^17.2.1",
+        "qs": "^6.14.0"
+    }
+}
