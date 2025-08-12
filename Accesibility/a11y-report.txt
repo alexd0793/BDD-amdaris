@@ -1,7 +1,0 @@
-
-🚨 Accessibility Issues on Energy management:
-1. Page should contain a level-one heading
-   Impact: moderate
-   Elements: 1
-   Rule: page-has-heading-one
-
