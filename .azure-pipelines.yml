@@ -1,0 +1,39 @@
+trigger:
+  - main
+ 
+jobs:
+- job: playwrightTests
+  displayName: Playwright Tests
+  strategy:
+    matrix:
+      shard1:
+        shard: 1/3
+      shard2:
+        shard: 2/3
+      shard3:
+        shard: 3/3
+  pool:
+    vmImage: ubuntu-latest
+  container: mcr.microsoft.com/playwright:v1.54.2-focal
+  steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '18'
+    # Cache npm packages
+    - task: Cache@2
+      inputs:
+        key: 'npm | "$(Agent.OS)" | package-lock.json'
+        restoreKeys: |
+          npm | "$(Agent.OS)"
+        path: $(Pipeline.Workspace)/.npm
+    # Install and run tests
+    - script: npm ci
+      displayName: Install Dependencies
+    - script: npx playwright test --shard=$(shard)
+      env:
+        CI: 'true'
+    # Publish results
+    - task: PublishPipelineArtifact@1
+      inputs:
+        artifactName: playwright-report
+        targetPath: playwright-report/
