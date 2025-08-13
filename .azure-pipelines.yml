@@ -1,0 +1,83 @@
+trigger:
+  - main
+
+# Optional: validate pull requests too
+pr:
+  - main
+
+jobs:
+- job: playwrightTests
+  displayName: Playwright Tests (Linux container, 3 shards)
+  pool:
+    vmImage: ubuntu-latest
+
+  # Make sure your package.json pins "@playwright/test": "1.54.0"
+  container: mcr.microsoft.com/playwright:v1.54.0-noble
+
+  strategy:
+    matrix:
+      shard1:
+        shard: 1/3
+      shard2:
+        shard: 2/3
+      shard3:
+        shard: 3/3
+
+  variables:
+    CI: 'true'   # lets you do headless in config if you prefer
+    LOGIN_EMAIL: $(LOGIN_EMAIL)
+    LOGIN_PASSWORD: $(LOGIN_PASSWORD)
+
+  steps:
+    - checkout: self
+
+    # Create a safe timestamp variable (yyyyMMddHHmmss)
+    - bash: |
+        echo "##vso[task.setvariable variable=SafeTimestamp]$(date +'%Y%m%d%H%M%S')"
+      displayName: Set safe timestamp variable
+
+    # Cache npm to speed up installs
+    - task: Cache@2
+      displayName: Cache npm
+      inputs:
+        key: 'npm | "$(Agent.OS)" | package-lock.json'
+        restoreKeys: |
+          npm | "$(Agent.OS)"
+        path: $(Pipeline.Workspace)/.npm
+
+    - script: npm ci --cache $(Pipeline.Workspace)/.npm --prefer-offline
+      displayName: Install dependencies
+
+    # Use xvfb so headed browsers won't fail without a display
+    # (If you enforce headless in config, you can drop xvfb-run)
+    - script: |
+        export LOGIN_EMAIL=$(LOGIN_EMAIL)
+        export LOGIN_PASSWORD=$(LOGIN_PASSWORD)
+        xvfb-run -a npx playwright test --shard=$(shard) --reporter=html,junit
+      displayName: Run Playwright tests (xvfb, sharded)
+
+    # Publish JUnit so results appear in the "Tests" tab even if tests fail
+    - task: PublishTestResults@2
+      displayName: Publish JUnit results
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results/**/*.xml'
+        mergeTestResults: true
+        failTaskOnFailedTests: false
+
+    # HTML report (open index.html after download)
+    - task: PublishPipelineArtifact@1
+      displayName: Publish Playwright HTML report
+      condition: succeededOrFailed()
+      inputs:
+        artifactName: playwright-report-$(Build.BuildId)-$(SafeTimestamp)
+        targetPath: playwright-report/
+
+    # Raw test-results (screenshots, videos, traces, per-test output)
+    - task: PublishPipelineArtifact@1
+      displayName: Publish raw test-results (traces/screenshots/videos)
+      condition: succeededOrFailed()
+      inputs:
+        artifactName: test-results-raw-$(Build.BuildId)-$(SafeTimestamp)
+        targetPath: test-results/
