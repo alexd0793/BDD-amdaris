@@ -1,0 +1,94 @@
+trigger:
+  - main
+
+# Optional: validate pull requests too
+pr:
+  - main
+
+# Run on a Windows hosted agent
+pool:
+  name: Azure Pipelines
+  vmImage: 'windows-latest'   # Windows Server 2022
+
+jobs:
+- job: playwrightTests
+  displayName: Playwright Tests (Windows VM, 3 shards)
+
+  # Shard the test run across 3 parallel jobs
+  strategy:
+    matrix:
+      shard1:
+        shard: 1/3
+      shard2:
+        shard: 2/3
+      shard3:
+        shard: 3/3
+
+  variables:
+    CI: 'true'   # lets you enforce headless in Playwright config if desired
+
+  steps:
+    - checkout: self
+
+    # Create a safe timestamp variable (yyyyMMddHHmmss) on Windows
+    - pwsh: |
+        Write-Host "##vso[task.setvariable variable=SafeTimestamp]$((Get-Date).ToString('yyyyMMddHHmmss'))"
+      displayName: Set safe timestamp variable
+
+    # (Optional) Use a specific Node version; comment out if you rely on the agent's Node
+    # - task: NodeTool@0
+    #   inputs:
+    #     versionSpec: '20.x'
+    #   displayName: Use Node 20.x
+
+    # Cache npm to speed up installs
+    - task: Cache@2
+      displayName: Cache npm
+      inputs:
+        key: 'npm | "$(Agent.OS)" | package-lock.json'
+        restoreKeys: |
+          npm | "$(Agent.OS)"
+        path: $(Pipeline.Workspace)\.npm
+
+    - script: npm ci --cache "$(Pipeline.Workspace)\.npm" --prefer-offline
+      displayName: Install dependencies
+
+    # Install Playwright browsers and run tests (no xvfb needed on Windows)
+    - pwsh: |
+        $env:LOGIN_EMAIL = "$(LOGIN_EMAIL)"
+        $env:LOGIN_PASSWORD = "$(LOGIN_PASSWORD)"
+        npx playwright install
+        npx playwright test --shard=$(shard) --reporter=html,junit
+      displayName: Run Playwright tests (Windows, sharded)
+
+    # Ensure test-results directory exists to avoid publish errors
+    - pwsh: |
+        if (-not (Test-Path "test-results")) { New-Item -ItemType Directory -Path "test-results" }
+      displayName: Ensure test-results directory exists
+
+    # Publish JUnit so results appear in the "Tests" tab even if tests fail
+    - task: PublishTestResults@2
+      displayName: Publish JUnit results
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results/**/*.xml'
+        mergeTestResults: true
+        failTaskOnFailedTests: false
+        allowEmptyResults: true
+
+    # HTML report (open index.html after download)
+    - task: PublishPipelineArtifact@1
+      displayName: Publish Playwright HTML report
+      condition: succeededOrFailed()
+      inputs:
+        artifactName: playwright-report-$(Build.BuildId)-$(SafeTimestamp)
+        targetPath: playwright-report/
+
+    # Raw test-results (screenshots, videos, traces, per-test output)
+    - task: PublishPipelineArtifact@1
+      displayName: Publish raw test-results (traces/screenshots/videos)
+      condition: succeededOrFailed()
+      inputs:
+        artifactName: test-results-raw-$(Build.BuildId)-$(SafeTimestamp)
+        targetPath: test-results/
